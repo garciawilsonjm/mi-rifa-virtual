@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel de Administración - Control de Rifas</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f0f2f5;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    h1 { color: #1a252f; text-align: center; }
+    
+    /* Login simple */
+    #loginSection {
+      max-width: 350px;
+      margin: 50px auto;
+      text-align: center;
+    }
+    input[type="password"] {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+    .btn-login {
+      width: 100%;
+      padding: 10px;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    /* Contenido Admin */
+    #adminSection { display: none; }
+    .tabla-boletos {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    .tabla-boletos th, .tabla-boletos td {
+      border: 1px solid #e0e0e0;
+      padding: 12px;
+      text-align: center;
+    }
+    .tabla-boletos th { background-color: #f8f9fa; }
+    
+    .badge {
+      padding: 5px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: bold;
+      color: white;
+    }
+    .badge.disponible { background: #2ecc71; }
+    .badge.apartado { background: #e67e22; }
+    .badge.comprado { background: #e74c3c; }
+
+    .btn-accion {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin: 2px;
+      font-weight: bold;
+    }
+    .btn-pagar { background: #2ecc71; color: white; }
+    .btn-liberar { background: #e74c3c; color: white; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- SECCIÓN DE ACCESO -->
+    <div id="loginSection">
+      <h2>Acceso Administrativo</h2>
+      <input type="password" id="claveAdmin" placeholder="Ingresa tu clave de acceso">
+      <button class="btn-login" onclick="validarClave()">Entrar al Panel</button>
+    </div>
+
+    <!-- SECCIÓN DEL PANEL -->
+    <div id="adminSection">
+      <h1>Panel de Control de la Rifa</h1>
+      <p style="text-align: center;">Gestiona los apartados, pagos y clientes en tiempo real.</p>
+
+      <table class="tabla-boletos">
+        <thead>
+          <tr>
+            <th>Nº</th>
+            <th>Estado</th>
+            <th>Cliente</th>
+            <th>Teléfono / WhatsApp</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="listaBoletos">
+          <!-- Datos cargados dinámicamente -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // 1. REEMPLAZA CON TUS LLAVES DE SUPABASE
+    const SUPABASE_URL = "https://fnjwavaacddazjnzsuzy.supabase.co/rest/v1/";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZuandhdmFhY2RkYXpqbnpzdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0NTcyMTEsImV4cCI6MjEwODAzMzIxMX0.sDvaGwwZXFMenjbe-GonTjtCQX1nzV4fW6fTohmGY4E;
+
+    // 2. DEFINE TU CONTRASEÑA PARA ENTRAR AL PANEL
+    const CLAVE_CORRECTA = "123456"; // Puedes cambiar esta clave por la que tú quieras
+
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    function validarClave() {
+      const pass = document.getElementById('claveAdmin').value;
+      if (pass === CLAVE_CORRECTA) {
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('adminSection').style.display = 'block';
+        cargarTablaAdmin();
+      } else {
+        alert("Contraseña incorrecta.");
+      }
+    }
+
+    async function cargarTablaAdmin() {
+      const { data: boletos, error } = await _supabase
+        .from('rifa')
+        .select('*')
+        .order('numero', { ascending: true });
+
+      if (error) {
+        alert("Error cargando la información.");
+        return;
+      }
+
+      const tbody = document.getElementById('listaBoletos');
+      tbody.innerHTML = '';
+
+      boletos.forEach(item => {
+        const tr = document.createElement('tr');
+        
+        const numFormatted = String(item.numero).padStart(2, '0');
+        const cliente = item.nombre_cliente || '---';
+        const telefono = item.telefono_cliente 
+          ? `<a href="https://wa.me/${item.telefono_cliente.replace(/[^0-9]/g, '')}" target="_blank">${item.telefono_cliente}</a>` 
+          : '---';
+
+        let acciones = '---';
+        if (item.estado === 'apartado') {
+          acciones = `
+            <button class="btn-accion btn-pagar" onclick="cambiarEstado(${item.numero}, 'comprado')">Marcar Pagado</button>
+            <button class="btn-accion btn-liberar" onclick="liberarNumero(${item.numero})">Liberar</button>
+          `;
+        } else if (item.estado === 'comprado') {
+          acciones = `
+            <button class="btn-accion btn-liberar" onclick="liberarNumero(${item.numero})">Liberar Número</button>
+          `;
+        }
+
+        tr.innerHTML = `
+          <td><strong>${numFormatted}</strong></td>
+          <td><span class="badge ${item.estado}">${item.estado.toUpperCase()}</span></td>
+          <td>${cliente}</td>
+          <td>${telefono}</td>
+          <td>${acciones}</td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function cambiarEstado(numero, nuevoEstado) {
+      const { error } = await _supabase
+        .from('rifa')
+        .update({ estado: nuevoEstado })
+        .eq('numero', numero);
+
+      if (!error) cargarTablaAdmin();
+    }
+
+    async function liberarNumero(numero) {
+      if (confirm(`¿Estás seguro de liberar el número ${String(numero).padStart(2, '0')}?`)) {
+        const { error } = await _supabase
+          .from('rifa')
+          .update({
+            estado: 'disponible',
+            nombre_cliente: null,
+            telefono_cliente: null
+          })
+          .eq('numero', numero);
+
+        if (!error) cargarTablaAdmin();
+      }
+    }
+  </script>
+</body>
+</html>
